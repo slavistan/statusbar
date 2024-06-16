@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/BurntSushi/xgb"
 	"github.com/BurntSushi/xgb/xproto"
@@ -57,18 +56,15 @@ func main() {
 
 	statusFns := []StatusFn{}
 	for _, cfg := range appCfg {
-		switch t := cfg.(type) {
+		switch c := cfg.(type) {
 		case TimeConfig:
-			statusFns = append(statusFns, MakeTimeStatusFn(cfg))
-			//???
+			statusFns = append(statusFns, MakeTimeStatusFn(c))
+		case DateConfig:
+			statusFns = append(statusFns, MakeDateStatusFn(c))
+		case NetspeedConfig:
+			statusFns = append(statusFns, MakeNetspeedStatusFn(c))
 		}
 	}
-	// statusFns := []func(id int, ch chan<- Status, done chan struct{}){
-	// 	MakeStatusNetspeedFn("enp69s0"),
-	// 	StatusRAMUsage,
-	// 	statusDate,
-	// 	statusTime,
-	// }
 
 	var wg sync.WaitGroup
 	wg.Add(len(statusFns))

@@ -78,7 +78,7 @@ func NewNetspeedConfig(m map[string]interface{}) (NetspeedConfig, error) {
 	return NetspeedConfig{Device: device, Period: time.Duration(periodMs) * time.Millisecond}, nil
 }
 
-func MakeStatusNetspeedFn(cfg NetspeedConfig) func(id int, ch chan<- Status, done chan struct{}) {
+func MakeNetspeedStatusFn(cfg NetspeedConfig) func(id int, ch chan<- Status, done chan struct{}) {
 	return func(id int, ch chan<- Status, done chan struct{}) {
 		rxBytesOld, txBytesOld, err := readRxTxBytes(cfg.Device)
 		if err != nil {
