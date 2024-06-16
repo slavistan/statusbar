@@ -4,25 +4,24 @@ import (
 	"testing"
 )
 
-func TestNetspeedUnmarshalling(t *testing.T) {
+func TestNewNetspeedConfig(t *testing.T) {
 	table := []struct {
-		json  string
+		m map[string]interface{}
 		valid bool
 	}{
-		{`{ "device": "wlan0", "period_ms": 1000 }`, true},
-		{`{ "device": "wlan0", "period_ms": 1 }`, true},
-		{`{ "device": "", "period_ms": 1000 }`, false},
-		{`{ "device": "wlan0", "period_ms": 0 }`, false},
-		{`{ "period_ms": 0 }`, false},
-		{`{ "device": "wlan0" }`, false},
-		{`{ "device": "wlan0", "period_ms": -1 }`, false},
+		{map[string]interface{}{ "device": "wlan0", "period_ms": 1000.0 }, true},
+		{map[string]interface{}{ "device": "wlan0", "period_ms": 1.0}, true},
+		{map[string]interface{}{ "device": "", "period_ms": 1000.0 }, false},
+		{map[string]interface{}{ "device": "wlan0", "period_ms": 0.0 }, false},
+		{map[string]interface{}{ "period_ms": 0.0 }, false},
+		{map[string]interface{}{ "device": "wlan0" }, false},
+		{map[string]interface{}{ "device": "wlan0", "period_ms": -1.0 }, false},
 	}
 
-	for _, input := range table {
-		var c NetspeedConfig
-		err := c.UnmarshalJSON([]byte(input.json))
+	for ii, input := range table {
+		_, err := NewNetspeedConfig(input.m)
 		if (err == nil) != input.valid {
-			t.Errorf("%s error: %v", input.json, err)
+			t.Errorf("%d: %s error: %v", ii, input.m, err)
 		}
 	}
 }

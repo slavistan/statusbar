@@ -1,13 +1,21 @@
 package main
 
 import (
-	"github.com/BurntSushi/xgb"
-	"github.com/BurntSushi/xgb/xproto"
+	"encoding/json"
+	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/BurntSushi/xgb"
+	"github.com/BurntSushi/xgb/xproto"
 )
+
+type StatusFn = func(id int, ch chan<- Status, done chan struct{})
+
+type AppCfg = []interface{}
 
 type Status struct {
 	id     int
@@ -36,14 +44,31 @@ func main() {
 	screen := xproto.Setup(conn).DefaultScreen(conn)
 	defer conn.Close()
 
-	// List status functions. Their statuses will be displayed in the order
-	// defined here.
-	statusFns := []func(id int, ch chan<- Status, done chan struct{}){
-		MakeStatusNetspeedFn("enp69s0"),
-		StatusRAMUsage,
-		statusDate,
-		statusTime,
+	cfgFilePath := "config.json"
+	cfgJson, err := os.ReadFile(cfgFilePath)
+	if err != nil {
+		log.Fatalf("error reading %s: %v", cfgFilePath, err)
 	}
+
+	appCfg, err := parseConfig(cfgJson)
+	if err != nil {
+		log.Fatalf("error reading %s: %v", cfgFilePath, err)
+	}
+
+	statusFns := []StatusFn{}
+	for _, cfg := range appCfg {
+		switch t := cfg.(type) {
+		case TimeConfig:
+			statusFns = append(statusFns, MakeTimeStatusFn(cfg))
+			//???
+		}
+	}
+	// statusFns := []func(id int, ch chan<- Status, done chan struct{}){
+	// 	MakeStatusNetspeedFn("enp69s0"),
+	// 	StatusRAMUsage,
+	// 	statusDate,
+	// 	statusTime,
+	// }
 
 	var wg sync.WaitGroup
 	wg.Add(len(statusFns))
@@ -70,42 +95,52 @@ func main() {
 	}
 }
 
-func statusDate(id int, ch chan<- Status, done chan struct{}) {
-	fn := func(t time.Time) Status {
-		return Status{id: id, status: t.Format("📅 2006-01-02")}
+func parseConfig(cfg []byte) (AppCfg, error) {
+	var cfgRaw map[string]interface{}
+
+	if err := json.Unmarshal(cfg, &cfgRaw); err != nil {
+		return nil, err
 	}
 
-	tick := time.NewTicker(time.Second)
-	defer tick.Stop()
+	statusArr, ok := cfgRaw["status"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid status field")
+	}
 
-	ch <- fn(time.Now())
-LOOP:
-	for {
-		select {
-		case t := <-tick.C:
-			ch <- fn(t)
-		case <-done:
-			break LOOP
+	appCfg := AppCfg{}
+	for _, v := range statusArr {
+		status, ok := v.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid status field")
+		}
+
+		t, ok := status["type"].(string)
+		if !ok {
+			return nil, fmt.Errorf("type missing in status config")
+		}
+		switch t {
+		case "time":
+			timeCfg, err := NewTimeConfig(status)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing time config: %v", err)
+			}
+			appCfg = append(appCfg, timeCfg)
+		case "date":
+			dateCfg, err := NewDateConfig(status)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing date config: %v", err)
+			}
+			appCfg = append(appCfg, dateCfg)
+		case "netspeed":
+			netspeedCfg, err := NewNetspeedConfig(status)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing netspeed config: %v", err)
+			}
+			appCfg = append(appCfg, netspeedCfg)
+		default:
+			return nil, fmt.Errorf("invalid type %s", t)
 		}
 	}
-}
 
-func statusTime(id int, ch chan<- Status, done chan struct{}) {
-	fn := func(t time.Time) Status {
-		return Status{id: id, status: t.Format("⌚ 15:04:05")}
-	}
-
-	tick := time.NewTicker(time.Second)
-	defer tick.Stop()
-
-	ch <- fn(time.Now())
-LOOP:
-	for {
-		select {
-		case t := <-tick.C:
-			ch <- fn(t)
-		case <-done:
-			break LOOP
-		}
-	}
+	return appCfg, nil
 }

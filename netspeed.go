@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"os"
 	"strconv"
 	"time"
@@ -59,29 +57,25 @@ func format(netDevice string, rxBPS float64, txBPS float64) string {
 }
 
 type NetspeedConfig struct {
-	Device   string
-	PeriodMs int
+	Device string
+	Period time.Duration
 }
 
-func (c *NetspeedConfig) UnmarshalJSON(b []byte) error {
-	var raw map[string]interface{}
-	if err := json.Unmarshal(b, &raw); err != nil {
-		return err
-	}
-
-	device, ok := raw["device"].(string)
+// Returns a NetspeedConfig from a string map as returned from parsing the json
+// config.
+func NewNetspeedConfig(m map[string]interface{}) (NetspeedConfig, error) {
+	device, ok := m["device"].(string)
 	if !ok || len(device) == 0 {
-		return fmt.Errorf("expected 'device' to be non-empty string")
+		return NetspeedConfig{}, fmt.Errorf("invalid device in netspeed config")
 	}
 
-	periodMs, ok := raw["period_ms"].(float64) // JSON numbers are float64 by default
-	if !ok || periodMs <= 0 {
-		return fmt.Errorf("expected 'period_ms' to be a number greater than 0")
+	periodMsF, ok := m["period_ms"].(float64)
+	periodMs := int(periodMsF)
+	if !ok || periodMs < 1 {
+		return NetspeedConfig{}, fmt.Errorf("invalid period in netspeed config")
 	}
 
-	c.Device = device
-	c.PeriodMs = int(math.Ceil(periodMs))
-	return nil
+	return NetspeedConfig{Device: device, Period: time.Duration(periodMs) * time.Millisecond}, nil
 }
 
 func MakeStatusNetspeedFn(cfg NetspeedConfig) func(id int, ch chan<- Status, done chan struct{}) {
@@ -95,7 +89,7 @@ func MakeStatusNetspeedFn(cfg NetspeedConfig) func(id int, ch chan<- Status, don
 
 		ch <- Status{id, format(cfg.Device, 0, 0)}
 
-		tick := time.NewTicker(time.Duration(cfg.PeriodMs))
+		tick := time.NewTicker(time.Duration(cfg.Period))
 		defer tick.Stop()
 
 	LOOP:
