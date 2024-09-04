@@ -14,6 +14,7 @@ import (
 
 type StatusFn = func(id int, ch chan<- Status, done chan struct{})
 
+// TODO: Nutzloser Typ? Wird nur zum Unmarshalling verwendet.
 type AppCfg = []interface{}
 
 type Status struct {
@@ -46,12 +47,14 @@ func main() {
 	cfgFilePath := "config.json"
 	cfgJson, err := os.ReadFile(cfgFilePath)
 	if err != nil {
-		log.Fatalf("error reading %s: %v", cfgFilePath, err)
+		log.Fatalf("error reading config file %s: %v", cfgFilePath, err)
 	}
 
+	// TODO: ist das nicht völlig unnötig? Kann ich nicht einfach
+	// innerhalb von parseConfig() das Array aus Statusfns initialisieren?
 	appCfg, err := parseConfig(cfgJson)
 	if err != nil {
-		log.Fatalf("error reading %s: %v", cfgFilePath, err)
+		log.Fatalf("error parsing config file %s: %v", cfgFilePath, err)
 	}
 
 	statusFns := []StatusFn{}
@@ -63,6 +66,8 @@ func main() {
 			statusFns = append(statusFns, MakeDateStatusFn(c))
 		case NetspeedConfig:
 			statusFns = append(statusFns, MakeNetspeedStatusFn(c))
+		case MemInfoConfig:
+			statusFns = append(statusFns, MakeMemInfoStatusFn(c))
 		}
 	}
 
@@ -133,6 +138,12 @@ func parseConfig(cfg []byte) (AppCfg, error) {
 				return nil, fmt.Errorf("error parsing netspeed config: %v", err)
 			}
 			appCfg = append(appCfg, netspeedCfg)
+		case "ram":
+			ramCfg, err := NewMemInfoConfig(status)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing RAM config: %v", err)
+			}
+			appCfg = append(appCfg, ramCfg)
 		default:
 			return nil, fmt.Errorf("invalid type %s", t)
 		}

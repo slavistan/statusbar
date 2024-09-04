@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+type NetspeedConfig struct {
+	Device string        // network device name
+	Period time.Duration // update period
+}
+
 func readRxTxBytes(netDevice string) (int64, int64, error) {
 	const rxBytesPath = "/sys/class/net/%s/statistics/rx_bytes"
 	const txBytesPath = "/sys/class/net/%s/statistics/tx_bytes"
@@ -56,11 +61,6 @@ func format(netDevice string, rxBPS float64, txBPS float64) string {
 	return fmt.Sprintf("🖧 %s: ⬆️ %04d "+txUnit+"B/s ⬇️ %04d "+rxUnit+"B/s", netDevice, int(txBPS), int(rxBPS))
 }
 
-type NetspeedConfig struct {
-	Device string
-	Period time.Duration
-}
-
 // Returns a NetspeedConfig from a string map as returned from parsing the json
 // config.
 func NewNetspeedConfig(m map[string]interface{}) (NetspeedConfig, error) {
@@ -78,6 +78,12 @@ func NewNetspeedConfig(m map[string]interface{}) (NetspeedConfig, error) {
 	return NetspeedConfig{Device: device, Period: time.Duration(periodMs) * time.Millisecond}, nil
 }
 
+// TODO: Allgemeine Frage: Ist es möglich die ID nicht durch die
+// Statusfunktionen selbst wiedergeben zu lassen? Das ist nicht
+// deren Aufgabe. Die Statusfns sollen nur ihre jeweilige Aufgabe
+// erledigen ohne Metainformationen ausgeben zu müssen.
+// Hierfür könnte man in der main loop einen Channel pro Statusmodul
+// nutzen.
 func MakeNetspeedStatusFn(cfg NetspeedConfig) func(id int, ch chan<- Status, done chan struct{}) {
 	return func(id int, ch chan<- Status, done chan struct{}) {
 		rxBytesOld, txBytesOld, err := readRxTxBytes(cfg.Device)
