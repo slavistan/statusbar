@@ -13,17 +13,20 @@ import (
 const POWER_SUPPLY_CAPACITY = "/sys/class/power_supply/%s/capacity"
 const POWER_SUPPLY_AC_ONLINE = "/sys/class/power_supply/AC/online"
 
+// TODO: Einheitliche Nomenklatur:
+// *Config für Konfiguration
+// *Status für Statusobjekte
 type BatteryConfig struct {
 	Battery string
 	Period  time.Duration
 }
 
-type Battery struct {
+type BatteryStatus struct {
 	Capacity int  // battery capacity in percent
 	ACOnline bool // whether the AC is connected
 }
 
-func (b Battery) String() string {
+func (b BatteryStatus) String() string {
 	var c string
 	if b.ACOnline {
 		c = "🔌"
@@ -33,46 +36,51 @@ func (b Battery) String() string {
 	return fmt.Sprintf("%s % 3d%%", c, b.Capacity)
 }
 
-func ReadBattery(battery string) (Battery, error) {
+func ReadBattery(battery string) (BatteryStatus, error) {
 	p := fmt.Sprintf(POWER_SUPPLY_CAPACITY, battery)
 	capStr, err := os.ReadFile(p)
 	if err != nil {
-		return Battery{}, fmt.Errorf("failed to read %s: %v", p, err)
+		return BatteryStatus{}, fmt.Errorf("failed to read %s: %v", p, err)
 	}
 	capStr = capStr[:len(capStr)-1] // remove trailing newline
 
 	acOnlineStr, err := os.ReadFile(POWER_SUPPLY_AC_ONLINE)
 	if err != nil {
-		return Battery{}, fmt.Errorf("failed to read %s: %v", p, err)
+		return BatteryStatus{}, fmt.Errorf("failed to read %s: %v", p, err)
 	}
 	acOnlineStr = acOnlineStr[:len(acOnlineStr)-1] // remove trailing newline
 
 	cap, err := strconv.Atoi(string(capStr))
 	if err != nil {
-		return Battery{}, fmt.Errorf("failed to atoi %s: %v", capStr, err)
+		return BatteryStatus{}, fmt.Errorf("failed to atoi %s: %v", capStr, err)
 	}
 	acOnline := string(acOnlineStr) != "0"
-	return Battery{cap, acOnline}, nil
+	return BatteryStatus{cap, acOnline}, nil
 }
 
-func NewBatteryConfig(m map[string]interface{}) (BatteryConfig, error) {
+func (c *BatteryConfig) Decode(m map[string]interface{}) error {
 	periodMsF, ok := m["period_ms"].(float64)
 	periodMs := int(periodMsF)
 	if !ok || periodMs < 1 {
-		return BatteryConfig{}, fmt.Errorf("invalid period in battery config")
+		return fmt.Errorf("invalid period in battery config")
 	}
+	c.Period = time.Duration(periodMs) * time.Millisecond
+
 	battery, ok := m["battery"].(string)
 	if !ok {
-		return BatteryConfig{}, fmt.Errorf("invalid battery in battery config")
+		return fmt.Errorf("invalid battery in battery config")
 	}
+	c.Battery = battery
 
-	return BatteryConfig{Period: time.Duration(periodMs) * time.Millisecond, Battery: battery}, nil
+	return nil
 }
 
-func MakeBatteryStatusFn(cfg BatteryConfig) StatusFn {
+// TODO: battery status als Beispiel für externen trigger nutzen
+// um dynamisch zu aktualisieren, wenn ac angeschlossen wird
+func (c BatteryConfig) MakeStatusFn() StatusFn {
 	return func(id int, ch chan<- Status, done chan struct{}) {
 		fn := func() Status {
-			battery, err := ReadBattery(cfg.Battery)
+			battery, err := ReadBattery(c.Battery)
 			if err != nil {
 				log.Printf("ReadBattery error: %v", err)
 				return Status{id, "error"}
@@ -80,7 +88,7 @@ func MakeBatteryStatusFn(cfg BatteryConfig) StatusFn {
 			return Status{id: id, status: fmt.Sprint(battery)}
 		}
 
-		tick := time.NewTicker(cfg.Period)
+		tick := time.NewTicker(c.Period)
 		defer tick.Stop()
 
 		ch <- fn()

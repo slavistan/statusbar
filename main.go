@@ -65,11 +65,11 @@ func main() {
 		case DateConfig:
 			statusFns = append(statusFns, MakeDateStatusFn(c))
 		case NetspeedConfig:
-			statusFns = append(statusFns, MakeNetspeedStatusFn(c))
-		case MemInfoConfig:
-			statusFns = append(statusFns, MakeMemInfoStatusFn(c))
+			statusFns = append(statusFns, c.MakeStatusFn())
+		case MemConfig:
+			statusFns = append(statusFns, c.MakeStatusFn())
 		case BatteryConfig:
-			statusFns = append(statusFns, MakeBatteryStatusFn(c))
+			statusFns = append(statusFns, c.MakeStatusFn())
 		}
 	}
 
@@ -129,29 +129,33 @@ func parseConfig(cfg []byte) (AppCfg, error) {
 			}
 			appCfg = append(appCfg, timeCfg)
 		case "date":
-			dateCfg, err := NewDateConfig(status)
+			var c DateConfig
+			err := c.Decode(status)
 			if err != nil {
 				return nil, fmt.Errorf("error parsing date config: %v", err)
 			}
-			appCfg = append(appCfg, dateCfg)
+			appCfg = append(appCfg, c)
 		case "netspeed":
-			netspeedCfg, err := NewNetspeedConfig(status)
+			var c NetspeedConfig
+			err := c.Decode(status)
 			if err != nil {
 				return nil, fmt.Errorf("error parsing netspeed config: %v", err)
 			}
-			appCfg = append(appCfg, netspeedCfg)
+			appCfg = append(appCfg, c)
 		case "ram":
-			ramCfg, err := NewMemInfoConfig(status)
+			var c MemConfig
+			err := c.Decode(status)
 			if err != nil {
 				return nil, fmt.Errorf("error parsing RAM config: %v", err)
 			}
-			appCfg = append(appCfg, ramCfg)
+			appCfg = append(appCfg, c)
 		case "battery":
-			batteryCfg, err := NewBatteryConfig(status)
+			var c BatteryConfig
+			err := c.Decode(status)
 			if err != nil {
 				return nil, fmt.Errorf("error parsing battery config: %v", err)
 			}
-			appCfg = append(appCfg, batteryCfg)
+			appCfg = append(appCfg, c)
 		default:
 			return nil, fmt.Errorf("invalid type %s", t)
 		}

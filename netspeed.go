@@ -13,6 +13,23 @@ type NetspeedConfig struct {
 	Period time.Duration // update period
 }
 
+func (c *NetspeedConfig) Decode(m map[string]interface{}) error {
+	periodMsF, ok := m["period_ms"].(float64)
+	periodMs := int(periodMsF)
+	if !ok || periodMs < 1 {
+		return fmt.Errorf("invalid period in netspeed config")
+	}
+	c.Period = time.Duration(periodMs) * time.Millisecond
+
+	device, ok := m["device"].(string)
+	if !ok || len(device) == 0 {
+		return fmt.Errorf("invalid device in netspeed config")
+	}
+	c.Device = device
+
+	return nil
+}
+
 func readRxTxBytes(netDevice string) (int64, int64, error) {
 	const rxBytesPath = "/sys/class/net/%s/statistics/rx_bytes"
 	const txBytesPath = "/sys/class/net/%s/statistics/tx_bytes"
@@ -61,22 +78,6 @@ func format(netDevice string, rxBPS float64, txBPS float64) string {
 	return fmt.Sprintf("🖧 %s: ⬆️ %04d "+txUnit+"B/s ⬇️ %04d "+rxUnit+"B/s", netDevice, int(txBPS), int(rxBPS))
 }
 
-// Returns a NetspeedConfig from a string map as returned from parsing the json
-// config.
-func NewNetspeedConfig(m map[string]interface{}) (NetspeedConfig, error) {
-	device, ok := m["device"].(string)
-	if !ok || len(device) == 0 {
-		return NetspeedConfig{}, fmt.Errorf("invalid device in netspeed config")
-	}
-
-	periodMsF, ok := m["period_ms"].(float64)
-	periodMs := int(periodMsF)
-	if !ok || periodMs < 1 {
-		return NetspeedConfig{}, fmt.Errorf("invalid period in netspeed config")
-	}
-
-	return NetspeedConfig{Device: device, Period: time.Duration(periodMs) * time.Millisecond}, nil
-}
 
 // TODO: Allgemeine Frage: Ist es möglich die ID nicht durch die
 // Statusfunktionen selbst wiedergeben zu lassen? Das ist nicht
@@ -84,25 +85,25 @@ func NewNetspeedConfig(m map[string]interface{}) (NetspeedConfig, error) {
 // erledigen ohne Metainformationen ausgeben zu müssen.
 // Hierfür könnte man in der main loop einen Channel pro Statusmodul
 // nutzen.
-func MakeNetspeedStatusFn(cfg NetspeedConfig) func(id int, ch chan<- Status, done chan struct{}) {
+func (c NetspeedConfig) MakeStatusFn() StatusFn {
 	return func(id int, ch chan<- Status, done chan struct{}) {
-		rxBytesOld, txBytesOld, err := readRxTxBytes(cfg.Device)
+		rxBytesOld, txBytesOld, err := readRxTxBytes(c.Device)
 		if err != nil {
 			log.Println("NetSpeed: ", err.Error())
 			ch <- Status{id: id, status: err.Error()}
 		}
 		timeOld := time.Now()
 
-		ch <- Status{id, format(cfg.Device, 0, 0)}
+		ch <- Status{id, format(c.Device, 0, 0)}
 
-		tick := time.NewTicker(time.Duration(cfg.Period))
+		tick := time.NewTicker(time.Duration(c.Period))
 		defer tick.Stop()
 
 	LOOP:
 		for {
 			select {
 			case <-tick.C:
-				rxBytes, txBytes, err := readRxTxBytes(cfg.Device)
+				rxBytes, txBytes, err := readRxTxBytes(c.Device)
 				if err != nil {
 					log.Println("NetSpeed: ", err.Error())
 					ch <- Status{id: id, status: err.Error()}
@@ -115,7 +116,7 @@ func MakeNetspeedStatusFn(cfg NetspeedConfig) func(id int, ch chan<- Status, don
 				durSec := time.Sub(timeOld).Seconds()
 				rxBPS := float64(rxBytes-rxBytesOld) / durSec
 				txBPS := float64(txBytes-txBytesOld) / durSec
-				ch <- Status{id, format(cfg.Device, rxBPS, txBPS)}
+				ch <- Status{id, format(c.Device, rxBPS, txBPS)}
 
 				rxBytesOld = rxBytes
 				txBytesOld = txBytes

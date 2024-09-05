@@ -9,16 +9,20 @@ type TimeConfig struct {
 	Period time.Duration
 }
 
+type TimeStatus struct {
+	Time time.Time
+}
+
 // Returns a TimeConfig from a string map as returned from parsing the json
 // config.
-func NewTimeConfig(m map[string]interface{}) (TimeConfig, error) {
+func (c *TimeConfig) Decode(m map[string]interface{}) error {
 	periodMsF, ok := m["period_ms"].(float64)
 	periodMs := int(periodMsF)
 	if !ok || periodMs < 1 {
-		return TimeConfig{}, fmt.Errorf("invalid period in time config")
+		return fmt.Errorf("invalid period in time config")
 	}
-
-	return TimeConfig{Period: time.Duration(periodMs) * time.Millisecond}, nil
+	c.Period = time.Duration(periodMs) * time.Millisecond
+	return nil
 }
 
 func MakeTimeStatusFn(cfg TimeConfig) StatusFn {

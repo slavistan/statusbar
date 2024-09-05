@@ -9,22 +9,29 @@ type DateConfig struct {
 	Period time.Duration
 }
 
-// Returns a DateConfig from a string map as returned from parsing the json
-// config.
-func NewDateConfig(m map[string]interface{}) (DateConfig, error) {
+type DateStatus struct {
+	Date time.Time
+}
+
+func (d DateStatus) String() string {
+	return d.Date.Format("📅 2006-01-02")
+}
+
+func (c *DateConfig) Decode(m map[string]interface{}) error {
 	periodMsF, ok := m["period_ms"].(float64)
 	periodMs := int(periodMsF)
 	if !ok || periodMs < 1 {
-		return DateConfig{}, fmt.Errorf("invalid period in date config")
+		return fmt.Errorf("invalid period in date config")
 	}
-
-	return DateConfig{Period: time.Millisecond * time.Duration(periodMs)}, nil
+	c.Period = time.Duration(periodMs) * time.Millisecond
+	return nil
 }
 
 func MakeDateStatusFn(cfg DateConfig) StatusFn {
 	return func(id int, ch chan<- Status, done chan struct{}) {
 		fn := func(t time.Time) Status {
-			return Status{id: id, status: t.Format("📅 2006-01-02")}
+			d := DateStatus{Date: t}
+			return Status{id: id, status: fmt.Sprint(d)}
 		}
 
 		tick := time.NewTicker(cfg.Period)
