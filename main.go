@@ -68,6 +68,8 @@ func main() {
 			statusFns = append(statusFns, MakeNetspeedStatusFn(c))
 		case MemInfoConfig:
 			statusFns = append(statusFns, MakeMemInfoStatusFn(c))
+		case BatteryConfig:
+			statusFns = append(statusFns, MakeBatteryStatusFn(c))
 		}
 	}
 
@@ -144,6 +146,12 @@ func parseConfig(cfg []byte) (AppCfg, error) {
 				return nil, fmt.Errorf("error parsing RAM config: %v", err)
 			}
 			appCfg = append(appCfg, ramCfg)
+		case "battery":
+			batteryCfg, err := NewBatteryConfig(status)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing battery config: %v", err)
+			}
+			appCfg = append(appCfg, batteryCfg)
 		default:
 			return nil, fmt.Errorf("invalid type %s", t)
 		}

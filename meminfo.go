@@ -89,7 +89,6 @@ func MakeMemInfoStatusFn(cfg MemInfoConfig) StatusFn {
 				return Status{id: id, status: err.Error()}
 			}
 
-			// usagePct := int((1.0 - (float64(ram.free) / float64(ram.total))) * 100.0)
 			return Status{id: id, status: fmt.Sprint(meminfo)}
 		}
 
