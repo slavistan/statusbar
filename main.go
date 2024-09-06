@@ -14,8 +14,15 @@ import (
 
 type StatusFn = func(id int, ch chan<- Status, done chan struct{})
 
-// TODO: Nutzloser Typ? Wird nur zum Unmarshalling verwendet.
-type AppCfg = []interface{}
+type ModuleConfig interface {
+	Decode(map[string]interface{}) error
+	MakeStatusFn() StatusFn
+}
+
+type AppConfig struct {
+	Modules []ModuleConfig
+	// to be extended, probably
+}
 
 type Status struct {
 	id     int
@@ -50,27 +57,14 @@ func main() {
 		log.Fatalf("error reading config file %s: %v", cfgFilePath, err)
 	}
 
-	// TODO: ist das nicht völlig unnötig? Kann ich nicht einfach
-	// innerhalb von parseConfig() das Array aus Statusfns initialisieren?
-	appCfg, err := parseConfig(cfgJson)
+	var appCfg AppConfig
+	json.Unmarshal(cfgJson, &appCfg)
 	if err != nil {
 		log.Fatalf("error parsing config file %s: %v", cfgFilePath, err)
 	}
-
 	statusFns := []StatusFn{}
-	for _, cfg := range appCfg {
-		switch c := cfg.(type) {
-		case TimeConfig:
-			statusFns = append(statusFns, MakeTimeStatusFn(c))
-		case DateConfig:
-			statusFns = append(statusFns, MakeDateStatusFn(c))
-		case NetspeedConfig:
-			statusFns = append(statusFns, c.MakeStatusFn())
-		case MemConfig:
-			statusFns = append(statusFns, c.MakeStatusFn())
-		case BatteryConfig:
-			statusFns = append(statusFns, c.MakeStatusFn())
-		}
+	for _, cfg := range appCfg.Modules {
+		statusFns = append(statusFns, cfg.MakeStatusFn())
 	}
 
 	var wg sync.WaitGroup
@@ -98,68 +92,54 @@ func main() {
 	}
 }
 
-func parseConfig(cfg []byte) (AppCfg, error) {
-	var cfgRaw map[string]interface{}
+func getConfigFromTypeString(t string) (ModuleConfig, error) {
+	switch t {
+	case "time":
+		return &TimeConfig{}, nil
+	case "date":
+		return &DateConfig{}, nil
+	case "netspeed":
+		return &NetspeedConfig{}, nil
+	case "ram":
+		return &MemConfig{}, nil
+	case "battery":
+		return &BatteryConfig{}, nil
+	default:
+		return nil, fmt.Errorf("invalid type %s", t)
+	}
+}
 
-	if err := json.Unmarshal(cfg, &cfgRaw); err != nil {
-		return nil, err
+func (c *AppConfig) UnmarshalJSON(data []byte) error {
+	var cfgRaw map[string]interface{}
+	if err := json.Unmarshal(data, &cfgRaw); err != nil {
+		return nil
 	}
 
 	statusArr, ok := cfgRaw["status"].([]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid status field")
+		return fmt.Errorf("invalid status field")
 	}
 
-	appCfg := AppCfg{}
+	c.Modules = []ModuleConfig{}
 	for _, v := range statusArr {
 		status, ok := v.(map[string]interface{})
 		if !ok {
-			return nil, fmt.Errorf("invalid status field")
+			return fmt.Errorf("invalid status field")
 		}
 
 		t, ok := status["type"].(string)
 		if !ok {
-			return nil, fmt.Errorf("type missing in status config")
+			return fmt.Errorf("type missing in status config")
 		}
-		switch t {
-		case "time":
-			timeCfg, err := NewTimeConfig(status)
-			if err != nil {
-				return nil, fmt.Errorf("error parsing time config: %v", err)
-			}
-			appCfg = append(appCfg, timeCfg)
-		case "date":
-			var c DateConfig
-			err := c.Decode(status)
-			if err != nil {
-				return nil, fmt.Errorf("error parsing date config: %v", err)
-			}
-			appCfg = append(appCfg, c)
-		case "netspeed":
-			var c NetspeedConfig
-			err := c.Decode(status)
-			if err != nil {
-				return nil, fmt.Errorf("error parsing netspeed config: %v", err)
-			}
-			appCfg = append(appCfg, c)
-		case "ram":
-			var c MemConfig
-			err := c.Decode(status)
-			if err != nil {
-				return nil, fmt.Errorf("error parsing RAM config: %v", err)
-			}
-			appCfg = append(appCfg, c)
-		case "battery":
-			var c BatteryConfig
-			err := c.Decode(status)
-			if err != nil {
-				return nil, fmt.Errorf("error parsing battery config: %v", err)
-			}
-			appCfg = append(appCfg, c)
-		default:
-			return nil, fmt.Errorf("invalid type %s", t)
-		}
-	}
 
-	return appCfg, nil
+		moduleConfig, err := getConfigFromTypeString(t)
+		if err != nil {
+			return err
+		}
+		if err := moduleConfig.Decode(status); err != nil {
+			return fmt.Errorf("error decoding %s config: %v", t, err)
+		}
+		c.Modules = append(c.Modules, moduleConfig)
+	}
+	return nil
 }

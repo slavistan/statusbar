@@ -27,14 +27,14 @@ func (c *DateConfig) Decode(m map[string]interface{}) error {
 	return nil
 }
 
-func MakeDateStatusFn(cfg DateConfig) StatusFn {
+func (c DateConfig) MakeStatusFn() StatusFn {
 	return func(id int, ch chan<- Status, done chan struct{}) {
 		fn := func(t time.Time) Status {
 			d := DateStatus{Date: t}
 			return Status{id: id, status: fmt.Sprint(d)}
 		}
 
-		tick := time.NewTicker(cfg.Period)
+		tick := time.NewTicker(c.Period)
 		defer tick.Stop()
 
 		ch <- fn(time.Now())

@@ -9,8 +9,11 @@ type TimeConfig struct {
 	Period time.Duration
 }
 
-type TimeStatus struct {
-	Time time.Time
+// TODO: Brauchen wir diesen Proxytyp?
+type TimeStatus time.Time
+
+func (s TimeStatus) String() string {
+	return time.Time(s).Format("⌚ 15:04:05")
 }
 
 // Returns a TimeConfig from a string map as returned from parsing the json
@@ -25,13 +28,13 @@ func (c *TimeConfig) Decode(m map[string]interface{}) error {
 	return nil
 }
 
-func MakeTimeStatusFn(cfg TimeConfig) StatusFn {
+func (c TimeConfig) MakeStatusFn() StatusFn {
 	return func(id int, ch chan<- Status, done chan struct{}) {
 		fn := func(t time.Time) Status {
-			return Status{id: id, status: t.Format("⌚ 15:04:05")}
+			return Status{id: id, status: fmt.Sprint(TimeStatus(t))}
 		}
 
-		tick := time.NewTicker(cfg.Period)
+		tick := time.NewTicker(c.Period)
 		defer tick.Stop()
 
 		ch <- fn(time.Now())
