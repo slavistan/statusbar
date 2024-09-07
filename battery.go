@@ -78,27 +78,18 @@ func (c *BatteryConfig) Decode(m map[string]interface{}) error {
 // TODO: battery status als Beispiel für externen trigger nutzen
 // um dynamisch zu aktualisieren, wenn ac angeschlossen wird
 func (c BatteryConfig) MakeStatusFn() StatusFn {
-	return func(id int, ch chan<- Status, done chan struct{}) {
-		fn := func() Status {
-			battery, err := ReadBattery(c.Battery)
-			if err != nil {
-				log.Printf("ReadBattery error: %v", err)
-				return Status{id, "error"}
-			}
-			return Status{id: id, status: fmt.Sprint(battery)}
-		}
-
+	return func(ch chan<- ModuleStatus) {
 		tick := time.NewTicker(c.Period)
 		defer tick.Stop()
-
-		ch <- fn()
-	LOOP:
 		for {
 			select {
 			case <-tick.C:
-				ch <- fn()
-			case <-done:
-				break LOOP
+				bat, err := ReadBattery(c.Battery)
+				if err != nil {
+					log.Printf("ReadBattery error: %v", err)
+				} else {
+					ch <- bat
+				}
 			}
 		}
 	}

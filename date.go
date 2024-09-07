@@ -9,12 +9,10 @@ type DateConfig struct {
 	Period time.Duration
 }
 
-type DateStatus struct {
-	Date time.Time
-}
+type DateStatus time.Time
 
 func (d DateStatus) String() string {
-	return d.Date.Format("📅 2006-01-02")
+	return time.Time(d).Format("📅 2006-01-02")
 }
 
 func (c *DateConfig) Decode(m map[string]interface{}) error {
@@ -28,23 +26,23 @@ func (c *DateConfig) Decode(m map[string]interface{}) error {
 }
 
 func (c DateConfig) MakeStatusFn() StatusFn {
-	return func(id int, ch chan<- Status, done chan struct{}) {
-		fn := func(t time.Time) Status {
-			d := DateStatus{Date: t}
-			return Status{id: id, status: fmt.Sprint(d)}
+	return func(ch chan<- ModuleStatus) {
+		get := func(t time.Time) ModuleStatus {
+			d := DateStatus(t)
+			return d
 		}
 
 		tick := time.NewTicker(c.Period)
 		defer tick.Stop()
 
-		ch <- fn(time.Now())
-	LOOP:
+		ch <- get(time.Now())
+		// LOOP:
 		for {
 			select {
 			case t := <-tick.C:
-				ch <- fn(t)
-			case <-done:
-				break LOOP
+				ch <- get(t)
+				// case <-done:
+				// 	break LOOP
 			}
 		}
 	}

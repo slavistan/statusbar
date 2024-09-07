@@ -16,13 +16,12 @@ type MemConfig struct {
 	Period time.Duration
 }
 
-
 type MemStatus struct {
 	Total int64 // Total RAM in bytes
 	Free  int64 // Available RAM in bytes
 }
 
-func (c* MemConfig) Decode(m map[string]interface{}) error {
+func (c *MemConfig) Decode(m map[string]interface{}) error {
 	periodMsF, ok := m["period_ms"].(float64)
 	periodMs := int(periodMsF)
 	if !ok || periodMs < 1 {
@@ -32,8 +31,6 @@ func (c* MemConfig) Decode(m map[string]interface{}) error {
 	return nil
 }
 
-// TODO: Sollten alle Statusmodule einfach String()able sein
-// und innerhalb der main() loop ihre Stringrepräsentation über fmt.Print() erhalten?
 func (m MemStatus) String() string {
 	usagePct := int((1.0 - (float64(m.Free) / float64(m.Total))) * 100.0)
 	return fmt.Sprintf("Mem % 2d%%", usagePct)
@@ -80,31 +77,36 @@ func ReadMemInfo() (MemStatus, error) {
 }
 
 func (c MemConfig) MakeStatusFn() StatusFn {
-	return func(id int, ch chan<- Status, done chan struct{}) {
-		fn := func() Status {
-			meminfo, err := ReadMemInfo()
-			if err != nil {
-				log.Printf("ReadMemInfo error: %v", err)
-				// TODO: Wie kann ich Statusupdates verhindern, falls ein
-				// Fehler auftritt und nur logs ausgeben? Passt hier mit den
-				// Abstraktionen nicht zusammen.
-				return Status{id: id, status: err.Error()}
-			}
+	return func(ch chan<- ModuleStatus) {
+		// get := func() ModuleStatus {
+		// 	meminfo, err := ReadMemInfo()
+		// 	if err != nil {
+		// 		log.Printf("ReadMemInfo error: %v", err)
+		// 		// TODO: Wie kann ich Statusupdates verhindern, falls ein
+		// 		// Fehler auftritt und nur logs ausgeben? Passt hier mit den
+		// 		// Abstraktionen nicht zusammen.
+		// 		return err.Error()
+		// 	}
 
-			return Status{id: id, status: fmt.Sprint(meminfo)}
-		}
+		// 	return fmt.Sprint(meminfo)
+		// }
 
 		tick := time.NewTicker(c.Period)
 		defer tick.Stop()
 
-		ch <- fn()
-	LOOP:
+		// ch <- get()
+		// LOOP:
 		for {
 			select {
 			case <-tick.C:
-				ch <- fn()
-			case <-done:
-				break LOOP
+				meminfo, err := ReadMemInfo()
+				if err != nil {
+					log.Println("ReadMemInfo error: %v", err)
+				} else {
+					ch <- meminfo
+				}
+				// case <-done:
+				// 	break LOOP
 			}
 		}
 	}

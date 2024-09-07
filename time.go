@@ -9,7 +9,6 @@ type TimeConfig struct {
 	Period time.Duration
 }
 
-// TODO: Brauchen wir diesen Proxytyp?
 type TimeStatus time.Time
 
 func (s TimeStatus) String() string {
@@ -29,22 +28,18 @@ func (c *TimeConfig) Decode(m map[string]interface{}) error {
 }
 
 func (c TimeConfig) MakeStatusFn() StatusFn {
-	return func(id int, ch chan<- Status, done chan struct{}) {
-		fn := func(t time.Time) Status {
-			return Status{id: id, status: fmt.Sprint(TimeStatus(t))}
-		}
-
+	return func(ch chan<- ModuleStatus) {
 		tick := time.NewTicker(c.Period)
 		defer tick.Stop()
 
-		ch <- fn(time.Now())
-	LOOP:
+		ch <- TimeStatus(time.Now())
+		// LOOP:
 		for {
 			select {
 			case t := <-tick.C:
-				ch <- fn(t)
-			case <-done:
-				break LOOP
+				ch <- TimeStatus(t)
+				// case <-done:
+				// 	break LOOP
 			}
 		}
 	}

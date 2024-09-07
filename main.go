@@ -6,13 +6,14 @@ import (
 	"log"
 	"os"
 	"strings"
-	"sync"
 
 	"github.com/BurntSushi/xgb"
 	"github.com/BurntSushi/xgb/xproto"
 )
 
-type StatusFn = func(id int, ch chan<- Status, done chan struct{})
+type StatusFn = func(ch chan<- ModuleStatus)
+
+// type StatusFn = func(ch chan<- string, done chan struct{})
 
 type ModuleConfig interface {
 	Decode(map[string]interface{}) error
@@ -24,9 +25,8 @@ type AppConfig struct {
 	// to be extended, probably
 }
 
-type Status struct {
-	id     int
-	status string
+type ModuleStatus interface {
+	String() string
 }
 
 func setXRootName(conn *xgb.Conn, screen *xproto.ScreenInfo, v string) error {
@@ -67,23 +67,48 @@ func main() {
 		statusFns = append(statusFns, cfg.MakeStatusFn())
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(len(statusFns))
-	ch := make(chan Status)
-	done := make(chan struct{})
-	for i := 0; i < len(statusFns); i++ {
-		go func(n int) {
-			defer wg.Done()
-			statusFns[n](n, ch, done)
-		}(i)
+	// TODO: brauche keine done channel, wenn jedes Moudule einen eigenen Channel
+	// nutzt. Channel kann einfach geschlossen werden.
+
+	// var wg sync.WaitGroup
+	// wg.Add(len(statusFns))
+	type Status struct {
+		id     int
+		status ModuleStatus
 	}
+	sinkCh := make(chan Status)
+	// done := make(chan struct{})
+	moduleChans := make([]chan ModuleStatus, len(statusFns))
+	for i := range moduleChans {
+		moduleChans[i] = make(chan ModuleStatus)
+	}
+	for i, fn := range statusFns {
+		// configure goroutine to receive from channel, expand by the index
+		go func(j int) {
+			for v := range moduleChans[j] {
+				sinkCh <- Status{id: j, status: v}
+			}
+		}(i)
+
+		go fn(moduleChans[i])
+
+		// TODO: wg.Done()
+	}
+
+	// ch := make(chan Status)
+	// for i := 0; i < len(statusFns); i++ {
+	// 	go func(n int) {
+	// 		defer wg.Done()
+	// 		statusFns[n](n, ch, done)
+	// 	}(i)
+	// }
 
 	status := make([]string, len(statusFns))
 	for {
-		st := <-ch
+		st := <-sinkCh
 		log.Printf("%v\n", st)
 
-		status[st.id] = st.status
+		status[st.id] = st.status.String()
 		s := strings.Join(status, " ")
 		err := setXRootName(conn, screen, s)
 		if err != nil {

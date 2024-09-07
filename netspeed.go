@@ -30,6 +30,12 @@ func (c *NetspeedConfig) Decode(m map[string]interface{}) error {
 	return nil
 }
 
+type NetspeedStatus struct {
+	Device  string
+	UpBPS   float64
+	DownBPS float64
+}
+
 func readRxTxBytes(netDevice string) (int64, int64, error) {
 	const rxBytesPath = "/sys/class/net/%s/statistics/rx_bytes"
 	const txBytesPath = "/sys/class/net/%s/statistics/tx_bytes"
@@ -55,75 +61,69 @@ func readRxTxBytes(netDevice string) (int64, int64, error) {
 	return rx, tx, nil
 }
 
-func format(netDevice string, rxBPS float64, txBPS float64) string {
+func (s NetspeedStatus) String() string {
 	rxUnit := " "
 	switch {
-	case rxBPS >= 10000 && rxBPS < 10000000:
+	case s.DownBPS >= 10000 && s.DownBPS < 10000000:
 		rxUnit = "K"
-		rxBPS /= 1000
-	case rxBPS >= 10000000:
+		s.DownBPS /= 1000
+	case s.DownBPS >= 10000000:
 		rxUnit = "M"
-		rxBPS /= 1000000
+		s.DownBPS /= 1000000
 	}
 
 	txUnit := " "
 	switch {
-	case txBPS >= 10000 && txBPS < 10000000:
+	case s.UpBPS >= 10000 && s.UpBPS < 10000000:
 		txUnit = "K"
-		txBPS /= 1000
-	case txBPS >= 10000000:
+		s.UpBPS /= 1000
+	case s.UpBPS >= 10000000:
 		txUnit = "M"
-		txBPS /= 1000000
+		s.UpBPS /= 1000000
 	}
-	return fmt.Sprintf("🖧 %s: ⬆️ %04d "+txUnit+"B/s ⬇️ %04d "+rxUnit+"B/s", netDevice, int(txBPS), int(rxBPS))
+	return fmt.Sprintf("🖧 %s: ⬆️ %04d "+txUnit+"B/s ⬇️ %04d "+rxUnit+"B/s", s.Device, int(s.UpBPS), int(s.DownBPS))
 }
 
-
-// TODO: Allgemeine Frage: Ist es möglich die ID nicht durch die
-// Statusfunktionen selbst wiedergeben zu lassen? Das ist nicht
-// deren Aufgabe. Die Statusfns sollen nur ihre jeweilige Aufgabe
-// erledigen ohne Metainformationen ausgeben zu müssen.
-// Hierfür könnte man in der main loop einen Channel pro Statusmodul
-// nutzen.
 func (c NetspeedConfig) MakeStatusFn() StatusFn {
-	return func(id int, ch chan<- Status, done chan struct{}) {
+	return func(ch chan<- ModuleStatus) {
 		rxBytesOld, txBytesOld, err := readRxTxBytes(c.Device)
 		if err != nil {
-			log.Println("NetSpeed: ", err.Error())
-			ch <- Status{id: id, status: err.Error()}
+			log.Printf("readRxTxByes error: %v", err)
+			rxBytesOld = 0
+			txBytesOld = 0
 		}
 		timeOld := time.Now()
 
-		ch <- Status{id, format(c.Device, 0, 0)}
+		// ch <- NetspeedStatus{c.Device, 0, 0}
 
 		tick := time.NewTicker(time.Duration(c.Period))
 		defer tick.Stop()
 
-	LOOP:
+		// LOOP:
 		for {
 			select {
-			case <-tick.C:
+			case timeNew := <-tick.C:
 				rxBytes, txBytes, err := readRxTxBytes(c.Device)
 				if err != nil {
-					log.Println("NetSpeed: ", err.Error())
-					ch <- Status{id: id, status: err.Error()}
+					log.Printf("readRxTxBytes error: %v\n", err)
+					rxBytesOld = 0
+					txBytesOld = 0
 				}
 
 				// We take a fresh timestamp instead of hardcoding the ticker's
 				// duration, as we could be delayed by the write to ch.
-				time := time.Now()
 
-				durSec := time.Sub(timeOld).Seconds()
+				durSec := timeNew.Sub(timeOld).Seconds()
 				rxBPS := float64(rxBytes-rxBytesOld) / durSec
 				txBPS := float64(txBytes-txBytesOld) / durSec
-				ch <- Status{id, format(c.Device, rxBPS, txBPS)}
+				ch <- NetspeedStatus{c.Device, txBPS, rxBPS}
 
 				rxBytesOld = rxBytes
 				txBytesOld = txBytes
-				timeOld = time
+				timeOld = timeNew
 
-			case <-done:
-				break LOOP
+				// case <-done:
+				// 	break LOOP
 			}
 		}
 	}
