@@ -83,15 +83,14 @@ func main() {
 		moduleChans[i] = make(chan ModuleStatus)
 	}
 	for i, fn := range statusFns {
-		// configure goroutine to receive from channel, expand by the index
+		// Annotate any received module status with its respective channel's
+		// index.
 		go func(j int) {
 			for v := range moduleChans[j] {
 				sinkCh <- Status{id: j, status: v}
 			}
 		}(i)
-
 		go fn(moduleChans[i])
-
 		// TODO: wg.Done()
 	}
 
@@ -106,18 +105,18 @@ func main() {
 	status := make([]string, len(statusFns))
 	for {
 		st := <-sinkCh
-		log.Printf("%v\n", st)
+		log.Printf("%d: %T %v\n", st.id, st.status, st.status)
 
 		status[st.id] = st.status.String()
 		s := strings.Join(status, " ")
 		err := setXRootName(conn, screen, s)
 		if err != nil {
-			log.Printf("updating X11 root name failed: %v", err)
+			log.Printf("setXRootName: %v", err)
 		}
 	}
 }
 
-func getConfigFromTypeString(t string) (ModuleConfig, error) {
+func getModuleConfigFromTypeString(t string) (ModuleConfig, error) {
 	switch t {
 	case "time":
 		return &TimeConfig{}, nil
@@ -129,6 +128,8 @@ func getConfigFromTypeString(t string) (ModuleConfig, error) {
 		return &MemConfig{}, nil
 	case "battery":
 		return &BatteryConfig{}, nil
+	case "cpu":
+		return &CpuConfig{}, nil
 	default:
 		return nil, fmt.Errorf("invalid type %s", t)
 	}
@@ -157,7 +158,7 @@ func (c *AppConfig) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("type missing in status config")
 		}
 
-		moduleConfig, err := getConfigFromTypeString(t)
+		moduleConfig, err := getModuleConfigFromTypeString(t)
 		if err != nil {
 			return err
 		}

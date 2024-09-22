@@ -110,6 +110,7 @@ func (c NetspeedConfig) MakeStatusFn() StatusFn {
 					txBytesOld = 0
 				}
 
+				// TODO: Was genau machen ich hier? Ist das notwendig?
 				// We take a fresh timestamp instead of hardcoding the ticker's
 				// duration, as we could be delayed by the write to ch.
 

@@ -16,11 +16,6 @@ type MemConfig struct {
 	Period time.Duration
 }
 
-type MemStatus struct {
-	Total int64 // Total RAM in bytes
-	Free  int64 // Available RAM in bytes
-}
-
 func (c *MemConfig) Decode(m map[string]interface{}) error {
 	periodMsF, ok := m["period_ms"].(float64)
 	periodMs := int(periodMsF)
@@ -31,14 +26,19 @@ func (c *MemConfig) Decode(m map[string]interface{}) error {
 	return nil
 }
 
-func (m MemStatus) String() string {
-	usagePct := int((1.0 - (float64(m.Free) / float64(m.Total))) * 100.0)
-	return fmt.Sprintf("Mem % 2d%%", usagePct)
+type MemStatus struct {
+	Total int64 // Total RAM in bytes
+	Free  int64 // Available RAM in bytes
 }
 
-// ReadMemInfo parses /proc/meminfo and returns relevant information
+func (m MemStatus) String() string {
+	usagePct := int((1.0 - (float64(m.Free) / float64(m.Total))) * 100.0)
+	return fmt.Sprintf("Mem %03d%%", usagePct)
+}
+
+// readMemInfo parses /proc/meminfo and returns relevant information
 // in a MemInfo.
-func ReadMemInfo() (MemStatus, error) {
+func readMemInfo() (MemStatus, error) {
 	file, err := os.Open("/proc/meminfo")
 	if err != nil {
 		return MemStatus{}, fmt.Errorf("error reading /proc/meminfo: %v", err)
@@ -99,7 +99,7 @@ func (c MemConfig) MakeStatusFn() StatusFn {
 		for {
 			select {
 			case <-tick.C:
-				meminfo, err := ReadMemInfo()
+				meminfo, err := readMemInfo()
 				if err != nil {
 					log.Println("ReadMemInfo error: %v", err)
 				} else {

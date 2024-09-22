@@ -33,7 +33,7 @@ func (b BatteryStatus) String() string {
 	} else {
 		c = "🔋"
 	}
-	return fmt.Sprintf("%s % 3d%%", c, b.Capacity)
+	return fmt.Sprintf("%s %03d%%", c, b.Capacity)
 }
 
 func ReadBattery(battery string) (BatteryStatus, error) {
