@@ -1,5 +1,8 @@
 package main
 
+// FIXME: Bezieht Änderungen der Zeitzone nicht mit ein (timedatectl set-timezone ...)
+// Selbes für time.go
+
 import (
 	"fmt"
 	"time"
