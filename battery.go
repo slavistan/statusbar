@@ -58,7 +58,7 @@ func ReadBattery(battery string) (BatteryStatus, error) {
 	return BatteryStatus{cap, acOnline}, nil
 }
 
-func (c *BatteryConfig) Decode(m map[string]interface{}) error {
+func (c *BatteryConfig) FromMap(m map[string]interface{}) error {
 	periodMsF, ok := m["period_ms"].(float64)
 	periodMs := int(periodMsF)
 	if !ok || periodMs < 1 {

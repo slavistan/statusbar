@@ -13,7 +13,7 @@ type NetspeedConfig struct {
 	Period time.Duration // update period
 }
 
-func (c *NetspeedConfig) Decode(m map[string]interface{}) error {
+func (c *NetspeedConfig) FromMap(m map[string]interface{}) error {
 	periodMsF, ok := m["period_ms"].(float64)
 	periodMs := int(periodMsF)
 	if !ok || periodMs < 1 {
@@ -28,6 +28,37 @@ func (c *NetspeedConfig) Decode(m map[string]interface{}) error {
 	c.Device = device
 
 	return nil
+}
+
+func (c NetspeedConfig) MakeStatusFn() StatusFn {
+	return func(ch chan<- ModuleStatus) {
+		ch <- NetspeedStatus{c.Device, 0, 0}
+
+		rxBytesOld, txBytesOld, err := readRxTxBytes(c.Device)
+		if err != nil {
+			log.Printf("readRxTxByes error: %v", err)
+		}
+		timeOld := time.Now()
+
+		tick := time.NewTicker(time.Duration(c.Period))
+		defer tick.Stop()
+
+		for timeNew := range tick.C {
+			rxBytes, txBytes, err := readRxTxBytes(c.Device)
+			if err != nil {
+				log.Printf("readRxTxBytes error: %v\n", err)
+			}
+
+			durSec := timeNew.Sub(timeOld).Seconds()
+			rxBPS := float64(rxBytes-rxBytesOld) / durSec
+			txBPS := float64(txBytes-txBytesOld) / durSec
+			ch <- NetspeedStatus{c.Device, txBPS, rxBPS}
+
+			rxBytesOld = rxBytes
+			txBytesOld = txBytes
+			timeOld = timeNew
+		}
+	}
 }
 
 type NetspeedStatus struct {
@@ -82,50 +113,4 @@ func (s NetspeedStatus) String() string {
 		s.UpBPS /= 1000000
 	}
 	return fmt.Sprintf("🖧 %s: ⬆️ %04d "+txUnit+"B/s ⬇️ %04d "+rxUnit+"B/s", s.Device, int(s.UpBPS), int(s.DownBPS))
-}
-
-func (c NetspeedConfig) MakeStatusFn() StatusFn {
-	return func(ch chan<- ModuleStatus) {
-		rxBytesOld, txBytesOld, err := readRxTxBytes(c.Device)
-		if err != nil {
-			log.Printf("readRxTxByes error: %v", err)
-			rxBytesOld = 0
-			txBytesOld = 0
-		}
-		timeOld := time.Now()
-
-		// ch <- NetspeedStatus{c.Device, 0, 0}
-
-		tick := time.NewTicker(time.Duration(c.Period))
-		defer tick.Stop()
-
-		// LOOP:
-		for {
-			select {
-			case timeNew := <-tick.C:
-				rxBytes, txBytes, err := readRxTxBytes(c.Device)
-				if err != nil {
-					log.Printf("readRxTxBytes error: %v\n", err)
-					rxBytesOld = 0
-					txBytesOld = 0
-				}
-
-				// TODO: Was genau machen ich hier? Ist das notwendig?
-				// We take a fresh timestamp instead of hardcoding the ticker's
-				// duration, as we could be delayed by the write to ch.
-
-				durSec := timeNew.Sub(timeOld).Seconds()
-				rxBPS := float64(rxBytes-rxBytesOld) / durSec
-				txBPS := float64(txBytes-txBytesOld) / durSec
-				ch <- NetspeedStatus{c.Device, txBPS, rxBPS}
-
-				rxBytesOld = rxBytes
-				txBytesOld = txBytes
-				timeOld = timeNew
-
-				// case <-done:
-				// 	break LOOP
-			}
-		}
-	}
 }

@@ -13,10 +13,8 @@ import (
 
 type StatusFn = func(ch chan<- ModuleStatus)
 
-// type StatusFn = func(ch chan<- string, done chan struct{})
-
 type ModuleConfig interface {
-	Decode(map[string]interface{}) error
+	FromMap(map[string]interface{}) error
 	MakeStatusFn() StatusFn
 }
 
@@ -51,7 +49,7 @@ func main() {
 	screen := xproto.Setup(conn).DefaultScreen(conn)
 	defer conn.Close()
 
-	cfgFilePath := "config.json"
+	cfgFilePath := "config.json" // TODO: Config intelligent finden
 	cfgJson, err := os.ReadFile(cfgFilePath)
 	if err != nil {
 		log.Fatalf("error reading config file %s: %v", cfgFilePath, err)
@@ -67,40 +65,26 @@ func main() {
 		statusFns = append(statusFns, cfg.MakeStatusFn())
 	}
 
-	// TODO: brauche keine done channel, wenn jedes Moudule einen eigenen Channel
-	// nutzt. Channel kann einfach geschlossen werden.
+	moduleChans := make([]chan ModuleStatus, len(statusFns))
+	for i := range moduleChans {
+		moduleChans[i] = make(chan ModuleStatus)
+	}
 
-	// var wg sync.WaitGroup
-	// wg.Add(len(statusFns))
+	// Annotate any received module status with its respective channel's index
+	// to keep track of which part of the status bar to update.
 	type Status struct {
 		id     int
 		status ModuleStatus
 	}
 	sinkCh := make(chan Status)
-	// done := make(chan struct{})
-	moduleChans := make([]chan ModuleStatus, len(statusFns))
-	for i := range moduleChans {
-		moduleChans[i] = make(chan ModuleStatus)
-	}
 	for i, fn := range statusFns {
-		// Annotate any received module status with its respective channel's
-		// index.
 		go func(j int) {
 			for v := range moduleChans[j] {
 				sinkCh <- Status{id: j, status: v}
 			}
 		}(i)
 		go fn(moduleChans[i])
-		// TODO: wg.Done()
 	}
-
-	// ch := make(chan Status)
-	// for i := 0; i < len(statusFns); i++ {
-	// 	go func(n int) {
-	// 		defer wg.Done()
-	// 		statusFns[n](n, ch, done)
-	// 	}(i)
-	// }
 
 	status := make([]string, len(statusFns))
 	for {
@@ -138,7 +122,7 @@ func getModuleConfigFromTypeString(t string) (ModuleConfig, error) {
 func (c *AppConfig) UnmarshalJSON(data []byte) error {
 	var cfgRaw map[string]interface{}
 	if err := json.Unmarshal(data, &cfgRaw); err != nil {
-		return nil
+		return fmt.Errorf("invalid config")
 	}
 
 	statusArr, ok := cfgRaw["status"].([]interface{})
@@ -162,7 +146,7 @@ func (c *AppConfig) UnmarshalJSON(data []byte) error {
 		if err != nil {
 			return err
 		}
-		if err := moduleConfig.Decode(status); err != nil {
+		if err := moduleConfig.FromMap(status); err != nil {
 			return fmt.Errorf("error decoding %s config: %v", t, err)
 		}
 		c.Modules = append(c.Modules, moduleConfig)

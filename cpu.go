@@ -14,7 +14,7 @@ type CpuConfig struct {
 	Period time.Duration
 }
 
-func (c *CpuConfig) Decode(m map[string]interface{}) error {
+func (c *CpuConfig) FromMap(m map[string]interface{}) error {
 	periodMsF, ok := m["period_ms"].(float64)
 	periodMs := int(periodMsF)
 	if !ok || periodMs < 1 {

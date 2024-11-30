@@ -20,7 +20,7 @@ func TestNewNetspeedConfig(t *testing.T) {
 
 	for ii, input := range table {
 		var c NetspeedConfig
-		err := c.Decode(input.m)
+		err := c.FromMap(input.m)
 		if (err == nil) != input.valid {
 			t.Errorf("%d: %s error: %v", ii, input.m, err)
 		}

@@ -16,7 +16,7 @@ type MemConfig struct {
 	Period time.Duration
 }
 
-func (c *MemConfig) Decode(m map[string]interface{}) error {
+func (c *MemConfig) FromMap(m map[string]interface{}) error {
 	periodMsF, ok := m["period_ms"].(float64)
 	periodMs := int(periodMsF)
 	if !ok || periodMs < 1 {

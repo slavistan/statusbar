@@ -18,7 +18,7 @@ func (d DateStatus) String() string {
 	return time.Time(d).Format("📅 2006-01-02")
 }
 
-func (c *DateConfig) Decode(m map[string]interface{}) error {
+func (c *DateConfig) FromMap(m map[string]interface{}) error {
 	periodMsF, ok := m["period_ms"].(float64)
 	periodMs := int(periodMsF)
 	if !ok || periodMs < 1 {
