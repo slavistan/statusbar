@@ -1,5 +1,8 @@
 package main
 
+// TODO: Im Fehlerfall Unicode Ersatzsymbol in Statuszeile ausgeben.
+//       Die Logs werden im Alltagsbetrieb nicht gesehen.
+
 import (
 	"encoding/json"
 	"fmt"
@@ -20,7 +23,6 @@ type ModuleConfig interface {
 
 type AppConfig struct {
 	Modules []ModuleConfig
-	// to be extended, probably
 }
 
 func (c *AppConfig) UnmarshalJSON(data []byte) error {
@@ -91,8 +93,7 @@ func main() {
 	}
 
 	var appCfg AppConfig
-	json.Unmarshal(cfgJson, &appCfg)
-	if err != nil {
+	if err := json.Unmarshal(cfgJson, &appCfg); err != nil {
 		log.Fatalf("error parsing config file %s: %v", cfgFilePath, err)
 	}
 	statusFns := []StatusFn{}
@@ -143,7 +144,7 @@ func getModuleConfigFromTypeString(t string) (ModuleConfig, error) {
 		return &DateConfig{}, nil
 	case "netspeed":
 		return &NetspeedConfig{}, nil
-	case "ram":
+	case "mem":
 		return &MemConfig{}, nil
 	case "battery":
 		return &BatteryConfig{}, nil
@@ -153,3 +154,7 @@ func getModuleConfigFromTypeString(t string) (ModuleConfig, error) {
 		return nil, fmt.Errorf("invalid type %s", t)
 	}
 }
+
+// func findConfig() (string, error) {
+
+// }
