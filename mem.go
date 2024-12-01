@@ -26,6 +26,23 @@ func (c *MemConfig) FromMap(m map[string]interface{}) error {
 	return nil
 }
 
+func (c MemConfig) MakeStatusFn() StatusFn {
+	return func(ch chan<- ModuleStatus) {
+
+		tick := time.NewTicker(c.Period)
+		defer tick.Stop()
+
+		for range tick.C {
+			meminfo, err := readMemInfo()
+			if err != nil {
+				log.Printf("mem: %v", err)
+			} else {
+				ch <- meminfo
+			}
+		}
+	}
+}
+
 type MemStatus struct {
 	Total int64 // Total RAM in bytes
 	Free  int64 // Available RAM in bytes
@@ -37,7 +54,7 @@ func (m MemStatus) String() string {
 }
 
 // readMemInfo parses /proc/meminfo and returns relevant information
-// in a MemInfo.
+// in a MemStatus.
 func readMemInfo() (MemStatus, error) {
 	file, err := os.Open("/proc/meminfo")
 	if err != nil {
@@ -74,40 +91,4 @@ func readMemInfo() (MemStatus, error) {
 	}
 
 	return ram, nil
-}
-
-func (c MemConfig) MakeStatusFn() StatusFn {
-	return func(ch chan<- ModuleStatus) {
-		// get := func() ModuleStatus {
-		// 	meminfo, err := ReadMemInfo()
-		// 	if err != nil {
-		// 		log.Printf("ReadMemInfo error: %v", err)
-		// 		// TODO: Wie kann ich Statusupdates verhindern, falls ein
-		// 		// Fehler auftritt und nur logs ausgeben? Passt hier mit den
-		// 		// Abstraktionen nicht zusammen.
-		// 		return err.Error()
-		// 	}
-
-		// 	return fmt.Sprint(meminfo)
-		// }
-
-		tick := time.NewTicker(c.Period)
-		defer tick.Stop()
-
-		// ch <- get()
-		// LOOP:
-		for {
-			select {
-			case <-tick.C:
-				meminfo, err := readMemInfo()
-				if err != nil {
-					log.Println("ReadMemInfo error: %v", err)
-				} else {
-					ch <- meminfo
-				}
-				// case <-done:
-				// 	break LOOP
-			}
-		}
-	}
 }

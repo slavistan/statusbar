@@ -1,8 +1,5 @@
 package main
 
-// FIXME: Bezieht Änderungen der Zeitzone nicht mit ein (timedatectl set-timezone ...)
-// Selbes für time.go
-
 import (
 	"fmt"
 	"time"
@@ -30,23 +27,13 @@ func (c *DateConfig) FromMap(m map[string]interface{}) error {
 
 func (c DateConfig) MakeStatusFn() StatusFn {
 	return func(ch chan<- ModuleStatus) {
-		get := func(t time.Time) ModuleStatus {
-			d := DateStatus(t)
-			return d
-		}
-
 		tick := time.NewTicker(c.Period)
 		defer tick.Stop()
 
-		ch <- get(time.Now())
-		// LOOP:
-		for {
-			select {
-			case t := <-tick.C:
-				ch <- get(t)
-				// case <-done:
-				// 	break LOOP
-			}
+		ch <- DateStatus(time.Now())
+		// TODO: reagiert nicht auf Änderung der Zeitzone
+		for t := range tick.C {
+			ch <- DateStatus(t)
 		}
 	}
 }

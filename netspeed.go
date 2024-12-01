@@ -67,6 +67,29 @@ type NetspeedStatus struct {
 	DownBPS float64
 }
 
+func (s NetspeedStatus) String() string {
+	rxUnit := " "
+	switch {
+	case s.DownBPS >= 10000 && s.DownBPS < 10000000:
+		rxUnit = "K"
+		s.DownBPS /= 1000
+	case s.DownBPS >= 10000000:
+		rxUnit = "M"
+		s.DownBPS /= 1000000
+	}
+
+	txUnit := " "
+	switch {
+	case s.UpBPS >= 10000 && s.UpBPS < 10000000:
+		txUnit = "K"
+		s.UpBPS /= 1000
+	case s.UpBPS >= 10000000:
+		txUnit = "M"
+		s.UpBPS /= 1000000
+	}
+	return fmt.Sprintf("🖧 %s: ⬆️ %04d "+txUnit+"B/s ⬇️ %04d "+rxUnit+"B/s", s.Device, int(s.UpBPS), int(s.DownBPS))
+}
+
 func readRxTxBytes(netDevice string) (int64, int64, error) {
 	const rxBytesPath = "/sys/class/net/%s/statistics/rx_bytes"
 	const txBytesPath = "/sys/class/net/%s/statistics/tx_bytes"
@@ -90,27 +113,4 @@ func readRxTxBytes(netDevice string) (int64, int64, error) {
 	}
 
 	return rx, tx, nil
-}
-
-func (s NetspeedStatus) String() string {
-	rxUnit := " "
-	switch {
-	case s.DownBPS >= 10000 && s.DownBPS < 10000000:
-		rxUnit = "K"
-		s.DownBPS /= 1000
-	case s.DownBPS >= 10000000:
-		rxUnit = "M"
-		s.DownBPS /= 1000000
-	}
-
-	txUnit := " "
-	switch {
-	case s.UpBPS >= 10000 && s.UpBPS < 10000000:
-		txUnit = "K"
-		s.UpBPS /= 1000
-	case s.UpBPS >= 10000000:
-		txUnit = "M"
-		s.UpBPS /= 1000000
-	}
-	return fmt.Sprintf("🖧 %s: ⬆️ %04d "+txUnit+"B/s ⬇️ %04d "+rxUnit+"B/s", s.Device, int(s.UpBPS), int(s.DownBPS))
 }

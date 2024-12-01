@@ -23,6 +23,41 @@ type AppConfig struct {
 	// to be extended, probably
 }
 
+func (c *AppConfig) UnmarshalJSON(data []byte) error {
+	var cfgRaw map[string]interface{}
+	if err := json.Unmarshal(data, &cfgRaw); err != nil {
+		return fmt.Errorf("invalid config")
+	}
+
+	statusArr, ok := cfgRaw["status"].([]interface{})
+	if !ok {
+		return fmt.Errorf("invalid status field")
+	}
+
+	c.Modules = []ModuleConfig{}
+	for _, v := range statusArr {
+		status, ok := v.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("invalid status field")
+		}
+
+		t, ok := status["type"].(string)
+		if !ok {
+			return fmt.Errorf("type missing in status config")
+		}
+
+		moduleConfig, err := getModuleConfigFromTypeString(t)
+		if err != nil {
+			return err
+		}
+		if err := moduleConfig.FromMap(status); err != nil {
+			return fmt.Errorf("error decoding %s config: %v", t, err)
+		}
+		c.Modules = append(c.Modules, moduleConfig)
+	}
+	return nil
+}
+
 type ModuleStatus interface {
 	String() string
 }
@@ -117,39 +152,4 @@ func getModuleConfigFromTypeString(t string) (ModuleConfig, error) {
 	default:
 		return nil, fmt.Errorf("invalid type %s", t)
 	}
-}
-
-func (c *AppConfig) UnmarshalJSON(data []byte) error {
-	var cfgRaw map[string]interface{}
-	if err := json.Unmarshal(data, &cfgRaw); err != nil {
-		return fmt.Errorf("invalid config")
-	}
-
-	statusArr, ok := cfgRaw["status"].([]interface{})
-	if !ok {
-		return fmt.Errorf("invalid status field")
-	}
-
-	c.Modules = []ModuleConfig{}
-	for _, v := range statusArr {
-		status, ok := v.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("invalid status field")
-		}
-
-		t, ok := status["type"].(string)
-		if !ok {
-			return fmt.Errorf("type missing in status config")
-		}
-
-		moduleConfig, err := getModuleConfigFromTypeString(t)
-		if err != nil {
-			return err
-		}
-		if err := moduleConfig.FromMap(status); err != nil {
-			return fmt.Errorf("error decoding %s config: %v", t, err)
-		}
-		c.Modules = append(c.Modules, moduleConfig)
-	}
-	return nil
 }
